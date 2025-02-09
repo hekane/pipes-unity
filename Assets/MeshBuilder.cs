@@ -4,6 +4,12 @@ using System.Collections.Generic;
 
 namespace Piping
 {
+    /// <summary>
+    /// This is a class for building pipes in Unity.
+    /// Unfortunately the functionality to build angle
+    /// joints is currently not working. Launch the scene
+    /// in Unity and build copper piping with W,A,S,D,Q,Z keys.
+    /// </summary>
     public class MeshBuilder : MonoBehaviour
     {
         public const float c_tau= Mathf.PI * 2;
@@ -36,9 +42,6 @@ namespace Piping
         Vector3 m_pipeCursorPosition = Vector3.zero;
         Vector3 m_lastDirection = Vector3.zero;
         
-        List<List<Vector3>> vertexBuffer = new List<List<Vector3>>();
- 
-
         float m_lastRadius;
         private void Awake()
         {
@@ -118,52 +121,34 @@ namespace Piping
         /// <param name="direction">The direction of growth.</param>
         private void UpdateMesh(Vector3 direction)
         {
-            Vector3 angleVector=Vector3.zero;
+            float h = height;
+
             if (Vector3.Angle(m_lastDirection, direction) > 0f)
             {
-                angleVector= m_pipeCursorPosition + m_lastDirection * radius + direction * radius;
+                Vector3 dir = m_lastDirection;
+                height = h / angleIterations;
+                for (int i=0; i < angleIterations; i++)
+                {
+                    BuildSegment(dir, radius, radius, false);
+                    dir = (m_lastDirection + direction / angleIterations) - m_lastDirection;
+                }
             }
+            height = h;
             
-            float h = height;
             
             if(Mathf.Abs(radius - m_lastRadius) > Mathf.Epsilon)
             {
                 height = m_lastRadius > radius ? m_lastRadius * 1.5f : radius * 1.5f;
-                BuildSegment(direction, m_lastRadius, radius, true, Vector3.zero);
-            }
-            height = h;
-            m_lastRadius = radius;
-            BuildSegment(direction, radius, radius, false, angleVector);
-            if (angleVector != Vector3.zero)
-            {
-                AngleFitting(angleVector);
-            }
-            height = h;
-        }
-        /// <summary>
-        /// Build an angle fitting when direction changes.
-        /// TODO: add more segments
-        /// </summary>
-        /// <param name="direction"></param>
-        private void AngleFitting(Vector3 direction)
-        {
-            BuildAngleSegment(direction);
-        }
-        private void BuildAngleSegment(Vector3 angleDirection)
-        {
-            List<Vector3> buffer1=vertexBuffer[vertexBuffer.Count-2];
-            List<Vector3> buffer2=vertexBuffer[vertexBuffer.Count - 3];
-            for (int i=0; i<buffer1.Count-2; i++)
-            {
-                CreatePolygons(buffer1[i], buffer1[i+1], buffer2[i], buffer2[i+1],1, angleDirection);
+                BuildSegment(direction, m_lastRadius, radius, true);
             }
 
-            m_Mesh.vertices = m_vertices;
-            m_Mesh.uv = m_UV;
-            m_Mesh.normals = m_normals;
-            m_Mesh.triangles = m_triangles;
-            m_MeshFilter.mesh = m_Mesh;
+            height = h;
+            m_lastRadius = radius;
+            BuildSegment(direction, radius, radius, false);
+
+            height = h;
         }
+
         /// <summary>
         /// Build a segment of the mesh.
         /// </summary>
@@ -171,14 +156,11 @@ namespace Piping
         /// <param name="radius1">Starting radius</param>
         /// <param name="radius2">End radius</param>
         /// <param name="radiusChanges">Does the radius change?</param>
-        private void BuildSegment(Vector3 direction, float radius1, float radius2, bool radiusChanges, Vector3 angleDirection)
+        private void BuildSegment(Vector3 direction, float radius1, float radius2, bool radiusChanges)
         {
             Vector3 cursorOffset = direction*height;
             m_lastDirection = direction;
-            List<Vector3> startbuffer = new List<Vector3>();
-            List<Vector3> endbuffer = new List<Vector3>();
-            vertexBuffer.Add(startbuffer);
-            vertexBuffer.Add(endbuffer);
+
             for (int i = 0; i < detail; i++)
             {
                 float angle1 = (c_tau / detail) * i;
@@ -197,7 +179,11 @@ namespace Piping
                     v1 = m_pipeCursorPosition + new Vector3(0, radius1 * Mathf.Sin(angle1), radius1 * Mathf.Cos(angle1));
                     v2 = m_pipeCursorPosition + new Vector3(0, radius1 * Mathf.Sin(angle2), radius1 * Mathf.Cos(angle2));
                 }
-
+                else if (direction == Vector3.forward || direction == Vector3.back)
+                {
+                    v1 = m_pipeCursorPosition + new Vector3(radius1 * Mathf.Sin(angle1), radius1 * Mathf.Cos(angle1),0);
+                    v2 = m_pipeCursorPosition + new Vector3(radius1 * Mathf.Sin(angle2), radius1 * Mathf.Cos(angle2),0);
+                }
                 if (radiusChanges)
                 {
                     if (direction == Vector3.up || direction == Vector3.down)
@@ -216,38 +202,9 @@ namespace Piping
                 }
                 else
                 {
-                    if (angleDirection!=Vector3.zero)
-                    {
-                        v1 += direction * radius * 1.5f + m_lastDirection * 1.5f;
-                        v2 += direction * radius * 1.5f + m_lastDirection * 1.5f;
-                        vt1 = v1+ direction * height;
-                        vt2= v2 + direction * height;
-                        CreatePolygons(v1, v2, vt1, vt2, 1, direction);
-                        cursorOffset = direction * radius * 1.5f + m_lastDirection * 1.5f + cursorOffset;
-                    }
-                    else
-                    {
-                        vt1 = v1 + direction * height;
-                        vt2 = v2 + direction * height;
-                        CreatePolygons(v1, v2, vt1, vt2, 1, direction);
-                    }
-                }
-
-                if (!startbuffer.Contains(v1))
-                {
-                    startbuffer.Add(v1);
-                }
-                if (!startbuffer.Contains(v2))
-                {
-                    startbuffer.Add(v2);
-                }
-                if (!endbuffer.Contains(vt1))
-                {
-                    endbuffer.Add(vt1);
-                }
-                if (!endbuffer.Contains(vt2))
-                {
-                    endbuffer.Add(vt2);
+                    vt1 = v1 + direction * height;
+                    vt2 = v2 + direction * height;
+                    CreatePolygons(v1, v2, vt1, vt2, 1, direction);
                 }
             }
             
@@ -269,7 +226,9 @@ namespace Piping
         /// <returns>Surface normal vector</returns>
         private Vector3 CalculateNormal(Vector3 from1, Vector3 from2, Vector3 to1, Vector3 direction)
         {
-            return direction==Vector3.left||direction==Vector3.down? -Vector3.Cross(to1 - from1, from2 - from1): Vector3.Cross(to1 - from1, from2 - from1);
+            return direction==Vector3.left||direction==Vector3.down || direction==Vector3.back?
+                -Vector3.Cross(to1 - from1, from2 - from1): 
+                Vector3.Cross(to1 - from1, from2 - from1);
         }
 
         /// <summary>
@@ -285,7 +244,6 @@ namespace Piping
         {
             Vector3 normal = CalculateNormal(from1, from2, to1, direction);
 
-            float offset = Vector3.Distance(from1, to1) / polyCount;
           
             for (int i = 0; i < polyCount; i++)
             {
