@@ -27,7 +27,7 @@ namespace Piping
         float radius = 0.250f;
         [SerializeField]
         [Tooltip("Angle iterations")]
-        int angleIterations = 4;
+        float angleIterations = 4;
 
         UIManager uiManager;
         MeshRenderer m_MeshRenderer;
@@ -125,12 +125,29 @@ namespace Piping
 
             if (Vector3.Angle(m_lastDirection, direction) > 0f)
             {
-                Vector3 dir = m_lastDirection;
-                height = h / angleIterations;
-                for (int i=0; i < angleIterations; i++)
+                //Vector3 dir =m_lastDirection*1.5f*radius;
+                //direction = direction * 1.5f * radius;
+                //height = radius*1.5f / angleIterations;
+                Vector3 rotator=RotatorVector(direction);
+                Vector3 rotatorOffset = RotatorOffset(direction);
+                //Debug.Log("Rotator: "+rotator+" Offset: "+rotatorOffset);
+                List<Vector3> positions = new List<Vector3>();
+                Vector3 start = m_pipeCursorPosition;
+                for (int i = 0; i <= angleIterations; i++)
                 {
-                    BuildSegment(dir, radius, radius, false);
-                    dir = (m_lastDirection + direction / angleIterations) - m_lastDirection;
+                    rotator = new Vector3(radius * 1.5f * Mathf.Cos(c_tau / 4 * i / angleIterations)-1.5f*radius, radius * 1.5f * Mathf.Sin(c_tau / 4 * i / angleIterations), 0);
+                    //var tempPos = rotatorOffset + rotator;
+
+                    Debug.DrawLine(start, rotator, Color.red, 30f);
+                    Debug.DrawLine(rotatorOffset, rotator+m_pipeCursorPosition, Color.red, 30f);
+                    height = Vector3.Distance(m_pipeCursorPosition, m_pipeCursorPosition + rotator);
+                    positions.Add(rotator);
+                    start = rotator;
+                }
+                for (int i=0; i <= angleIterations; i++)
+                {
+                    //Debug.Log("Drawing segment from " +m_pipeCursorPosition+ " To "+(m_pipeCursorPosition+dir));
+                    BuildSegment((m_pipeCursorPosition + positions[i]-m_pipeCursorPosition), radius, radius, false);
                 }
             }
             height = h;
@@ -147,6 +164,14 @@ namespace Piping
             BuildSegment(direction, radius, radius, false);
 
             height = h;
+        }
+        private Vector3 RotatorOffset(Vector3 direction)
+        {
+            return m_pipeCursorPosition + direction*1.5f*radius;
+        }
+        private Vector3 RotatorVector(Vector3 direction)
+        {
+            return direction * 1.5f * radius;
         }
 
         /// <summary>
@@ -183,6 +208,12 @@ namespace Piping
                 {
                     v1 = m_pipeCursorPosition + new Vector3(radius1 * Mathf.Sin(angle1), radius1 * Mathf.Cos(angle1),0);
                     v2 = m_pipeCursorPosition + new Vector3(radius1 * Mathf.Sin(angle2), radius1 * Mathf.Cos(angle2),0);
+                }
+                else
+                {
+                    v1 = m_pipeCursorPosition + new Vector3(radius1 * Mathf.Cos(angle1), 0, radius1 * Mathf.Sin(angle1));
+                    v2 = m_pipeCursorPosition + new Vector3(radius1 * Mathf.Cos(angle2), 0, radius1 * Mathf.Sin(angle2));
+
                 }
                 if (radiusChanges)
                 {
