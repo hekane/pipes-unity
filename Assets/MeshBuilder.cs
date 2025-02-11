@@ -1,5 +1,8 @@
 using UnityEngine;
 using System.Collections.Generic;
+using System.Threading.Tasks;
+using UnityEngine.UIElements;
+using Unity.VisualScripting;
 
 
 namespace Piping
@@ -65,6 +68,10 @@ namespace Piping
         public void UpdateLengthvalue()
         {
             height = uiManager.GetLenght();
+            if (height < 1)
+            {
+                height = 1;
+            }
         }
         /// <summary>
         /// Get updated radius slider value from UI
@@ -74,6 +81,10 @@ namespace Piping
         public void UpdateRadiusValue()
         {
             radius = sizes[uiManager.GetRadius()];
+            if (radius <= 0f)
+            {
+                radius = sizes[3];
+            }
         }
         /// <summary>
         /// Get updated detail slider value from UI
@@ -81,6 +92,10 @@ namespace Piping
         public void UpdateDetailValue()
         {
             detail = uiManager.GetDetail();
+            if (detail < 4)
+            {
+                detail = 4;
+            }
         }
         /// <summary>
         /// Read user input and update mesh accordingly.
@@ -119,35 +134,52 @@ namespace Piping
         /// Add polygons to mesh. Gets called on FixedUpdate.
         /// </summary>
         /// <param name="direction">The direction of growth.</param>
-        private void UpdateMesh(Vector3 direction)
+        private async void UpdateMesh(Vector3 direction)
         {
+            if (direction == -m_lastDirection) return;
             float h = height;
 
+            //Super BROKEN
+            
             if (Vector3.Angle(m_lastDirection, direction) > 0f)
             {
-                //Vector3 dir =m_lastDirection*1.5f*radius;
-                //direction = direction * 1.5f * radius;
-                //height = radius*1.5f / angleIterations;
-                Vector3 rotator=RotatorVector(direction);
+
+                ///List<Vector3> positions = new List<Vector3>();
+                Vector3 start = Vector3.zero;
+                Vector3 rotationAxis = 
+                    direction == Vector3.right && (m_lastDirection == Vector3.up || m_lastDirection == Vector3.down) ||
+                    direction == Vector3.left && (m_lastDirection == Vector3.up || m_lastDirection == Vector3.down) ||
+                    direction == Vector3.up && (m_lastDirection == Vector3.left || m_lastDirection == Vector3.right) ||
+                    direction == Vector3.down && (m_lastDirection == Vector3.left || m_lastDirection == Vector3.right)? Vector3.forward: 
+                    (direction == Vector3.forward||direction==Vector3.back) && (m_lastDirection==Vector3.left||m_lastDirection==Vector3.right)?Vector3.up: Vector3.right;
+
+                float sign = direction == Vector3.right && (m_lastDirection == Vector3.up || m_lastDirection == Vector3.forward) ||
+                    direction == Vector3.down && (m_lastDirection == Vector3.right || m_lastDirection == Vector3.forward) ||
+                    direction == Vector3.forward && (m_lastDirection == Vector3.up || m_lastDirection == Vector3.right) ||
+                    direction == Vector3.left && (m_lastDirection == Vector3.down || m_lastDirection == Vector3.back) ||
+                    direction == Vector3.up && (m_lastDirection == Vector3.left || m_lastDirection == Vector3.back) ||
+                    direction == Vector3.back && (m_lastDirection == Vector3.up || m_lastDirection == Vector3.right) ? -1 : 1;
+                Vector3 rotator = RotatorVector(direction, rotationAxis, 0);
                 Vector3 rotatorOffset = RotatorOffset(direction);
-                //Debug.Log("Rotator: "+rotator+" Offset: "+rotatorOffset);
-                List<Vector3> positions = new List<Vector3>();
-                Vector3 start = m_pipeCursorPosition;
+
+                float angle = (c_tau / 4f)/ angleIterations * sign;
+                Debug.Log("Axis: " + rotationAxis + " angle: " + angle);
                 for (int i = 0; i <= angleIterations; i++)
                 {
-                    rotator = new Vector3(radius * 1.5f * Mathf.Cos(c_tau / 4 * i / angleIterations)-1.5f*radius, radius * 1.5f * Mathf.Sin(c_tau / 4 * i / angleIterations), 0);
-                    //var tempPos = rotatorOffset + rotator;
+                    //rotator = new Vector3(radius * 1.5f * Mathf.Cos(c_tau / 4 * i / angleIterations)-1.5f*radius, radius * 1.5f * Mathf.Sin(c_tau / 4 * i / angleIterations), 0);
+                    rotator = RotatorVector(direction, rotationAxis, angle*i);
 
-                    Debug.DrawLine(start, rotator, Color.red, 30f);
-                    Debug.DrawLine(rotatorOffset, rotator+m_pipeCursorPosition, Color.red, 30f);
-                    height = Vector3.Distance(m_pipeCursorPosition, m_pipeCursorPosition + rotator);
-                    positions.Add(rotator);
+                    Debug.DrawLine(rotatorOffset, rotator+rotatorOffset, Color.red, 30f);
+                    Debug.DrawLine(rotator+rotatorOffset, start+rotatorOffset, Color.green, 30f);
+                    await Task.Delay(1000);
+                    //Debug.DrawLine(rotatorOffset, rotator+m_pipeCursorPosition, Color.red, 30f);
+                    //height = Vector3.Distance(m_pipeCursorPosition, m_pipeCursorPosition + rotator);
+                    //positions.Add(rotator);
                     start = rotator;
                 }
                 for (int i=0; i <= angleIterations; i++)
                 {
-                    //Debug.Log("Drawing segment from " +m_pipeCursorPosition+ " To "+(m_pipeCursorPosition+dir));
-                    BuildSegment((m_pipeCursorPosition + positions[i]-m_pipeCursorPosition), radius, radius, false);
+                    //await BuildSegment((m_pipeCursorPosition + positions[i]-m_pipeCursorPosition), radius, radius, false,Vector3.zero, 0 );
                 }
             }
             height = h;
@@ -156,12 +188,12 @@ namespace Piping
             if(Mathf.Abs(radius - m_lastRadius) > Mathf.Epsilon)
             {
                 height = m_lastRadius > radius ? m_lastRadius * 1.5f : radius * 1.5f;
-                BuildSegment(direction, m_lastRadius, radius, true);
+                await BuildSegment(direction, m_lastRadius, radius, true, Vector3.zero, 0);
             }
 
             height = h;
             m_lastRadius = radius;
-            BuildSegment(direction, radius, radius, false);
+            await BuildSegment(direction, radius, radius, false, Vector3.zero, 0);
 
             height = h;
         }
@@ -169,11 +201,79 @@ namespace Piping
         {
             return m_pipeCursorPosition + direction*1.5f*radius;
         }
-        private Vector3 RotatorVector(Vector3 direction)
+        private Vector3 RotatorVector(Vector3 direction, Vector3 rotationAxis, float angle)
         {
-            return direction * 1.5f * radius;
-        }
+            Vector3 rotator = 1.5f*radius*-direction;
+            //Vector3 rotator = -direction * 1.5f * radius;
+            
+            if (rotationAxis.x == 1)
+            {
+                Debug.Log("Rotating around x");
+                if (direction == Vector3.up)
+                {
+                    angle = m_lastDirection == Vector3.left ? angle - c_tau / 4f : angle + c_tau * 3 / 4f;
+                }
+                if (direction == Vector3.down)
+                {
+                    angle = m_lastDirection == Vector3.right ? angle - c_tau * 7 / 4f : angle + c_tau / 4;
+                }
+                if (direction == Vector3.forward)
+                {
+                    angle = m_lastDirection == Vector3.up ? angle + c_tau / 2f : angle - c_tau / 2f;
+                }
+                if (direction == Vector3.back)
+                {
+                    angle = m_lastDirection == Vector3.up ? angle : angle + c_tau;
+                }
+                rotator = new Vector3(0,radius * 1.5f * Mathf.Cos(angle), radius * 1.5f * Mathf.Sin(angle));
+            }
+            if (rotationAxis.y == 1)
+            {
+                Debug.Log("Rotating around y");
+                if (direction == Vector3.forward)
+                {
+                    angle = m_lastDirection == Vector3.left ? angle - c_tau / 4f : angle + c_tau * 3 / 4f;
+                }
+                if (direction == Vector3.back)
+                {
+                    angle = m_lastDirection == Vector3.right ? angle - c_tau * 7 / 4f : angle + c_tau / 4;
+                }
+                if (direction == Vector3.right)
+                {
+                    angle = m_lastDirection == Vector3.up ? angle + c_tau / 2f : angle - c_tau / 2f;
+                }
+                if (direction == Vector3.left)
+                {
+                    angle = m_lastDirection == Vector3.up ? angle : angle + c_tau;
+                }
 
+                rotator = new Vector3(radius * 1.5f * Mathf.Cos(angle),0, radius * 1.5f * Mathf.Sin(angle));
+
+            }
+            if (rotationAxis.z == 1)
+            {
+                Debug.Log("Rotating around z");
+                if ( direction == Vector3.up)
+                {
+                    angle = m_lastDirection==Vector3.left ? angle - c_tau / 4f : angle + c_tau*3/4f;
+                }
+                if (direction == Vector3.down)
+                {
+                    angle = m_lastDirection == Vector3.right ? angle - c_tau *7/ 4f : angle + c_tau / 4;
+                }
+                if (direction == Vector3.right)
+                {
+                    angle = m_lastDirection == Vector3.up ? angle+c_tau/2f : angle - c_tau / 2f;
+                }
+                if (direction == Vector3.left)
+                {
+                    angle = m_lastDirection == Vector3.up ? angle : angle + c_tau;
+                }
+                rotator = new Vector3(radius * 1.5f * Mathf.Cos(angle), radius * 1.5f * Mathf.Sin(angle), 0);
+            }
+            
+            return rotator;
+        }
         /// <summary>
         /// Build a segment of the mesh.
         /// </summary>
@@ -181,7 +281,7 @@ namespace Piping
         /// <param name="radius1">Starting radius</param>
         /// <param name="radius2">End radius</param>
         /// <param name="radiusChanges">Does the radius change?</param>
-        private void BuildSegment(Vector3 direction, float radius1, float radius2, bool radiusChanges)
+        private async Task BuildSegment(Vector3 direction, float radius1, float radius2, bool radiusChanges, Vector3 turnAxis,float angle)
         {
             Vector3 cursorOffset = direction*height;
             m_lastDirection = direction;
@@ -221,12 +321,14 @@ namespace Piping
                     {
                         vt1 = m_pipeCursorPosition + new Vector3(radius2 * Mathf.Cos(angle1), 0, radius2 * Mathf.Sin(angle1)) + direction * height;
                         vt2 = m_pipeCursorPosition + new Vector3(radius2 * Mathf.Cos(angle2), 0, radius2 * Mathf.Sin(angle2)) + direction * height;
+                        RotateVertices(ref v1, ref v2, ref vt1, ref vt2, angle, turnAxis);
                         CreatePolygons(v1, v2, vt1, vt2, 1, direction);
                     }
                     else if (direction == Vector3.left || direction == Vector3.right)
                     {
                         vt1 = m_pipeCursorPosition + new Vector3(0, radius2 * Mathf.Sin(angle1), radius2 * Mathf.Cos(angle1)) + direction * height;
                         vt2 = m_pipeCursorPosition + new Vector3(0, radius2 * Mathf.Sin(angle2), radius2 * Mathf.Cos(angle2)) + direction * height;
+                        RotateVertices(ref v1, ref v2, ref vt1, ref vt2, angle, turnAxis);
                         CreatePolygons(v1, v2, vt1, vt2, 1, direction);
                     }
 
@@ -235,6 +337,7 @@ namespace Piping
                 {
                     vt1 = v1 + direction * height;
                     vt2 = v2 + direction * height;
+                    RotateVertices(ref v1, ref v2, ref vt1, ref vt2, angle, turnAxis);
                     CreatePolygons(v1, v2, vt1, vt2, 1, direction);
                 }
             }
@@ -245,6 +348,34 @@ namespace Piping
             m_Mesh.triangles = m_triangles;
             m_MeshFilter.mesh = m_Mesh;
             m_pipeCursorPosition += cursorOffset;
+            Debug.Log("Segment ready...");
+            //await Task.Delay(1000);
+        }
+        private void RotateVertices(ref Vector3 v1,ref Vector3 v2,ref Vector3 v3, ref Vector3 v4 ,float angle, Vector3 rotationAxis)
+        {
+            if (rotationAxis.x == 1)
+            {
+                v1 = new Vector3(v1.x, v1.y*Mathf.Cos(angle), v1.z * Mathf.Sin(angle));
+                v2 = new Vector3(v2.x, v2.y*Mathf.Cos(angle), v2.z * Mathf.Sin(angle));
+                v3 = new Vector3(v3.x, v3.y*Mathf.Cos(angle), v3.z * Mathf.Sin(angle));
+                v4 = new Vector3(v4.x, v4.y*Mathf.Cos(angle), v4.z * Mathf.Sin(angle));
+            }
+            if (rotationAxis.y == 1)
+            {
+                v1 = new Vector3(v1.x * Mathf.Cos(angle), v1.y, v1.z * Mathf.Sin(angle));
+                v2 = new Vector3(v2.x * Mathf.Cos(angle), v2.y, v2.z * Mathf.Sin(angle));
+                v3 = new Vector3(v3.x * Mathf.Cos(angle), v3.y, v3.z * Mathf.Sin(angle));
+                v4 = new Vector3(v4.x * Mathf.Cos(angle), v4.y, v4.z * Mathf.Sin(angle));
+
+            }
+            if (rotationAxis.z == 1)
+            {
+                v1 = new Vector3(v1.x * Mathf.Cos(angle), v1.y * Mathf.Sin(angle), v1.z );
+                v2 = new Vector3(v2.x * Mathf.Cos(angle), v2.y * Mathf.Sin(angle), v2.z);
+                v3 = new Vector3(v3.x * Mathf.Cos(angle), v3.y * Mathf.Sin(angle), v3.z );
+                v4 = new Vector3(v4.x * Mathf.Cos(angle), v4.y * Mathf.Sin(angle), v4.z );
+
+            }
         }
 
         /// <summary>

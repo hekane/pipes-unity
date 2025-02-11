@@ -21,6 +21,10 @@ public class UIManager : MonoBehaviour
         m_pipeSegmentLenghtSlider.onValueChanged.AddListener(OnSlider1ValueChanged);
         m_detailSlider.onValueChanged.AddListener(OnSlider2ValueChanged);
         m_pipeRadiusSlider.onValueChanged.AddListener(OnSlider3ValueChanged);
+        l.text = m_pipeSegmentLenghtSlider.value.ToString();
+        r.text = m_pipeRadiusSlider.value.ToString();
+        d.text = m_detailSlider.value.ToString();
+
     }
 
     public void OnSlider1ValueChanged(float value)
