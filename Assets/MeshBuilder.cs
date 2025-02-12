@@ -146,19 +146,24 @@ namespace Piping
 
                 ///List<Vector3> positions = new List<Vector3>();
                 Vector3 start = Vector3.zero;
+                /*
                 Vector3 rotationAxis = 
                     direction == Vector3.right && (m_lastDirection == Vector3.up || m_lastDirection == Vector3.down) ||
                     direction == Vector3.left && (m_lastDirection == Vector3.up || m_lastDirection == Vector3.down) ||
                     direction == Vector3.up && (m_lastDirection == Vector3.left || m_lastDirection == Vector3.right) ||
                     direction == Vector3.down && (m_lastDirection == Vector3.left || m_lastDirection == Vector3.right)? Vector3.forward: 
                     (direction == Vector3.forward||direction==Vector3.back) && (m_lastDirection==Vector3.left||m_lastDirection==Vector3.right)?Vector3.up: Vector3.right;
-
                 float sign = direction == Vector3.right && (m_lastDirection == Vector3.up || m_lastDirection == Vector3.forward) ||
                     direction == Vector3.down && (m_lastDirection == Vector3.right || m_lastDirection == Vector3.forward) ||
                     direction == Vector3.forward && (m_lastDirection == Vector3.up || m_lastDirection == Vector3.right) ||
                     direction == Vector3.left && (m_lastDirection == Vector3.down || m_lastDirection == Vector3.back) ||
                     direction == Vector3.up && (m_lastDirection == Vector3.left || m_lastDirection == Vector3.back) ||
                     direction == Vector3.back && (m_lastDirection == Vector3.up || m_lastDirection == Vector3.right) ? -1 : 1;
+                */
+
+                Vector3 rotationAxis = Vector3.Cross(m_lastDirection, direction);
+                float sign = Vector3.Dot(rotationAxis, Vector3.one)<0?-1:1;
+
                 Vector3 rotator = RotatorVector(direction, rotationAxis, 0);
                 Vector3 rotatorOffset = RotatorOffset(direction);
 
@@ -206,7 +211,7 @@ namespace Piping
             Vector3 rotator = 1.5f*radius*-direction;
             //Vector3 rotator = -direction * 1.5f * radius;
             
-            if (rotationAxis.x == 1)
+            if (rotationAxis.x == 1|| rotationAxis.x == -1)
             {
                 Debug.Log("Rotating around x");
                 if (direction == Vector3.up)
@@ -227,7 +232,7 @@ namespace Piping
                 }
                 rotator = new Vector3(0,radius * 1.5f * Mathf.Cos(angle), radius * 1.5f * Mathf.Sin(angle));
             }
-            if (rotationAxis.y == 1)
+            if (rotationAxis.y == 1|| rotationAxis.y == -1)
             {
                 Debug.Log("Rotating around y");
                 if (direction == Vector3.forward)
@@ -250,7 +255,7 @@ namespace Piping
                 rotator = new Vector3(radius * 1.5f * Mathf.Cos(angle),0, radius * 1.5f * Mathf.Sin(angle));
 
             }
-            if (rotationAxis.z == 1)
+            if (rotationAxis.z == 1 || rotationAxis.z == -1)
             {
                 Debug.Log("Rotating around z");
                 if ( direction == Vector3.up)
