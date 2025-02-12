@@ -144,22 +144,8 @@ namespace Piping
             if (Vector3.Angle(m_lastDirection, direction) > 0f)
             {
 
-                ///List<Vector3> positions = new List<Vector3>();
+                List<Vector3> positions = new List<Vector3>();
                 Vector3 start = Vector3.zero;
-                /*
-                Vector3 rotationAxis = 
-                    direction == Vector3.right && (m_lastDirection == Vector3.up || m_lastDirection == Vector3.down) ||
-                    direction == Vector3.left && (m_lastDirection == Vector3.up || m_lastDirection == Vector3.down) ||
-                    direction == Vector3.up && (m_lastDirection == Vector3.left || m_lastDirection == Vector3.right) ||
-                    direction == Vector3.down && (m_lastDirection == Vector3.left || m_lastDirection == Vector3.right)? Vector3.forward: 
-                    (direction == Vector3.forward||direction==Vector3.back) && (m_lastDirection==Vector3.left||m_lastDirection==Vector3.right)?Vector3.up: Vector3.right;
-                float sign = direction == Vector3.right && (m_lastDirection == Vector3.up || m_lastDirection == Vector3.forward) ||
-                    direction == Vector3.down && (m_lastDirection == Vector3.right || m_lastDirection == Vector3.forward) ||
-                    direction == Vector3.forward && (m_lastDirection == Vector3.up || m_lastDirection == Vector3.right) ||
-                    direction == Vector3.left && (m_lastDirection == Vector3.down || m_lastDirection == Vector3.back) ||
-                    direction == Vector3.up && (m_lastDirection == Vector3.left || m_lastDirection == Vector3.back) ||
-                    direction == Vector3.back && (m_lastDirection == Vector3.up || m_lastDirection == Vector3.right) ? -1 : 1;
-                */
 
                 Vector3 rotationAxis = Vector3.Cross(m_lastDirection, direction);
                 float sign = Vector3.Dot(rotationAxis, Vector3.one)<0?-1:1;
@@ -171,20 +157,20 @@ namespace Piping
                 Debug.Log("Axis: " + rotationAxis + " angle: " + angle);
                 for (int i = 0; i <= angleIterations; i++)
                 {
-                    //rotator = new Vector3(radius * 1.5f * Mathf.Cos(c_tau / 4 * i / angleIterations)-1.5f*radius, radius * 1.5f * Mathf.Sin(c_tau / 4 * i / angleIterations), 0);
                     rotator = RotatorVector(direction, rotationAxis, angle*i);
-
+                    if(start==Vector3.zero) start = rotator;
                     Debug.DrawLine(rotatorOffset, rotator+rotatorOffset, Color.red, 30f);
                     Debug.DrawLine(rotator+rotatorOffset, start+rotatorOffset, Color.green, 30f);
-                    await Task.Delay(1000);
+                    await Task.Delay(100);
                     //Debug.DrawLine(rotatorOffset, rotator+m_pipeCursorPosition, Color.red, 30f);
-                    //height = Vector3.Distance(m_pipeCursorPosition, m_pipeCursorPosition + rotator);
-                    //positions.Add(rotator);
+                    height = Vector3.Distance(m_pipeCursorPosition, m_pipeCursorPosition + start+rotatorOffset);
+                    positions.Add((rotator + rotatorOffset) - (start + rotatorOffset));
                     start = rotator;
                 }
                 for (int i=0; i <= angleIterations; i++)
                 {
-                    //await BuildSegment((m_pipeCursorPosition + positions[i]-m_pipeCursorPosition), radius, radius, false,Vector3.zero, 0 );
+                    await BuildSegment(positions[i], radius, radius, false,rotationAxis, angle*angleIterations );
+                    await Task.Delay(500);
                 }
             }
             height = h;
@@ -209,75 +195,14 @@ namespace Piping
         private Vector3 RotatorVector(Vector3 direction, Vector3 rotationAxis, float angle)
         {
             Vector3 rotator = 1.5f*radius*-direction;
-            //Vector3 rotator = -direction * 1.5f * radius;
-            
-            if (rotationAxis.x == 1|| rotationAxis.x == -1)
-            {
-                Debug.Log("Rotating around x");
-                if (direction == Vector3.up)
-                {
-                    angle = m_lastDirection == Vector3.left ? angle - c_tau / 4f : angle + c_tau * 3 / 4f;
-                }
-                if (direction == Vector3.down)
-                {
-                    angle = m_lastDirection == Vector3.right ? angle - c_tau * 7 / 4f : angle + c_tau / 4;
-                }
-                if (direction == Vector3.forward)
-                {
-                    angle = m_lastDirection == Vector3.up ? angle + c_tau / 2f : angle - c_tau / 2f;
-                }
-                if (direction == Vector3.back)
-                {
-                    angle = m_lastDirection == Vector3.up ? angle : angle + c_tau;
-                }
-                rotator = new Vector3(0,radius * 1.5f * Mathf.Cos(angle), radius * 1.5f * Mathf.Sin(angle));
-            }
-            if (rotationAxis.y == 1|| rotationAxis.y == -1)
-            {
-                Debug.Log("Rotating around y");
-                if (direction == Vector3.forward)
-                {
-                    angle = m_lastDirection == Vector3.left ? angle - c_tau / 4f : angle + c_tau * 3 / 4f;
-                }
-                if (direction == Vector3.back)
-                {
-                    angle = m_lastDirection == Vector3.right ? angle - c_tau * 7 / 4f : angle + c_tau / 4;
-                }
-                if (direction == Vector3.right)
-                {
-                    angle = m_lastDirection == Vector3.up ? angle + c_tau / 2f : angle - c_tau / 2f;
-                }
-                if (direction == Vector3.left)
-                {
-                    angle = m_lastDirection == Vector3.up ? angle : angle + c_tau;
-                }
+            Vector3 cross = Vector3.Cross(rotator, rotationAxis);
+            float dot = Vector3.Dot(rotator, rotationAxis);
+            float sign = Vector3.Dot(rotationAxis, Vector3.one);
+            angle = sign < 0 ? angle : -angle;
 
-                rotator = new Vector3(radius * 1.5f * Mathf.Cos(angle),0, radius * 1.5f * Mathf.Sin(angle));
 
-            }
-            if (rotationAxis.z == 1 || rotationAxis.z == -1)
-            {
-                Debug.Log("Rotating around z");
-                if ( direction == Vector3.up)
-                {
-                    angle = m_lastDirection==Vector3.left ? angle - c_tau / 4f : angle + c_tau*3/4f;
-                }
-                if (direction == Vector3.down)
-                {
-                    angle = m_lastDirection == Vector3.right ? angle - c_tau *7/ 4f : angle + c_tau / 4;
-                }
-                if (direction == Vector3.right)
-                {
-                    angle = m_lastDirection == Vector3.up ? angle+c_tau/2f : angle - c_tau / 2f;
-                }
-                if (direction == Vector3.left)
-                {
-                    angle = m_lastDirection == Vector3.up ? angle : angle + c_tau;
-                }
-                rotator = new Vector3(radius * 1.5f * Mathf.Cos(angle), radius * 1.5f * Mathf.Sin(angle), 0);
-            }
-            
-            return rotator;
+            //Rodrigues formula
+            return rotator*Mathf.Cos(angle) + cross*Mathf.Sin(angle)+rotationAxis*dot*(1 - Mathf.Cos(angle));
         }
         /// <summary>
         /// Build a segment of the mesh.
@@ -356,8 +281,27 @@ namespace Piping
             Debug.Log("Segment ready...");
             //await Task.Delay(1000);
         }
+        private Vector3 RotateVertex(Vector3 vertex, Vector3 rotationAxis, float angle)
+        {
+            Vector3 cross = Vector3.Cross(vertex, rotationAxis);
+            float dot = Vector3.Dot(vertex, rotationAxis);
+            float sign = Vector3.Dot(rotationAxis, Vector3.one);
+            angle = sign < 0 ? angle : -angle;
+
+            //Rodrigues formula
+            return vertex * Mathf.Cos(angle) + cross * Mathf.Sin(angle) + rotationAxis * dot * (1 - Mathf.Cos(angle));
+        }
         private void RotateVertices(ref Vector3 v1,ref Vector3 v2,ref Vector3 v3, ref Vector3 v4 ,float angle, Vector3 rotationAxis)
         {
+            var vertices = new Vector3[] { v1, v2, v3, v4 };
+            
+            for (int i=0; i<vertices.Length;i++)
+            {
+                Debug.Log("Rotating vertex:" + vertices[i]+" by " + angle);
+                vertices[i] = RotateVertex(vertices[i], rotationAxis, angle);
+                Debug.Log("Rotated vertex:" + vertices[i]);
+            }
+            /*
             if (rotationAxis.x == 1)
             {
                 v1 = new Vector3(v1.x, v1.y*Mathf.Cos(angle), v1.z * Mathf.Sin(angle));
@@ -380,7 +324,7 @@ namespace Piping
                 v3 = new Vector3(v3.x * Mathf.Cos(angle), v3.y * Mathf.Sin(angle), v3.z );
                 v4 = new Vector3(v4.x * Mathf.Cos(angle), v4.y * Mathf.Sin(angle), v4.z );
 
-            }
+            }*/
         }
 
         /// <summary>
