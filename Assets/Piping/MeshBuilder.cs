@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine.UIElements;
 using Unity.VisualScripting;
+using UnityEditor.Profiling.Memory.Experimental;
 
 
 namespace Piping
@@ -30,7 +31,8 @@ namespace Piping
         float radius = 0.250f;
         [SerializeField]
         [Tooltip("Angle iterations")]
-        float angleIterations = 4;
+        [Range(1,12)]
+        int angleIterations = 4;
 
         UIManager uiManager;
         MeshRenderer m_MeshRenderer;
@@ -134,9 +136,10 @@ namespace Piping
         /// Add polygons to mesh. Gets called on FixedUpdate.
         /// </summary>
         /// <param name="direction">The direction of growth.</param>
-        private async void UpdateMesh(Vector3 direction)
+        private void UpdateMesh(Vector3 direction)
         {
             if (direction == -m_lastDirection) return;
+            if(m_lastDirection==Vector3.zero) m_lastDirection = direction;
             float h = height;
 
             //Super BROKEN
@@ -161,16 +164,15 @@ namespace Piping
                     if(start==Vector3.zero) start = rotator;
                     Debug.DrawLine(rotatorOffset, rotator+rotatorOffset, Color.red, 30f);
                     Debug.DrawLine(rotator+rotatorOffset, start+rotatorOffset, Color.green, 30f);
-                    await Task.Delay(100);
-                    //Debug.DrawLine(rotatorOffset, rotator+m_pipeCursorPosition, Color.red, 30f);
-                    height = Vector3.Distance(m_pipeCursorPosition, m_pipeCursorPosition + start+rotatorOffset);
-                    positions.Add((rotator + rotatorOffset) - (start + rotatorOffset));
+                    height = Vector3.Distance(rotator, start);
+                    Debug.Log(height);
+                    if (start!=rotator)
+                        positions.Add(rotator - start );
                     start = rotator;
                 }
-                for (int i=0; i <= angleIterations; i++)
+                for (int i=0; i < angleIterations; i++)
                 {
-                    await BuildSegment(positions[i], radius, radius, false,rotationAxis, angle*angleIterations );
-                    await Task.Delay(500);
+                    BuildSegment(positions[i].normalized, radius, radius);
                 }
             }
             height = h;
@@ -179,12 +181,12 @@ namespace Piping
             if(Mathf.Abs(radius - m_lastRadius) > Mathf.Epsilon)
             {
                 height = m_lastRadius > radius ? m_lastRadius * 1.5f : radius * 1.5f;
-                await BuildSegment(direction, m_lastRadius, radius, true, Vector3.zero, 0);
+                BuildSegment(direction, m_lastRadius, radius);
             }
 
             height = h;
             m_lastRadius = radius;
-            await BuildSegment(direction, radius, radius, false, Vector3.zero, 0);
+            BuildSegment(direction, radius, radius);
 
             height = h;
         }
@@ -211,136 +213,82 @@ namespace Piping
         /// <param name="radius1">Starting radius</param>
         /// <param name="radius2">End radius</param>
         /// <param name="radiusChanges">Does the radius change?</param>
-        private async Task BuildSegment(Vector3 direction, float radius1, float radius2, bool radiusChanges, Vector3 turnAxis,float angle)
+        private void BuildSegment(Vector3 direction, float radius1, float radius2)
         {
-            Vector3 cursorOffset = direction*height;
-            m_lastDirection = direction;
+            direction = direction.normalized;
+            Vector3 cursorOffset = direction * height;
+            Vector3 axi = GetCenterAxis(direction);
+            Vector3 offsetStart = axi * radius1;
+            Vector3 offsetEnd = axi * radius2;
 
             for (int i = 0; i < detail; i++)
             {
-                float angle1 = (c_tau / detail) * i;
-                float angle2 = (c_tau / detail) * (i + 1);
-                Vector3 v1 = Vector3.zero;
-                Vector3 v2 = Vector3.zero;
-                Vector3 vt1 = Vector3.zero;
-                Vector3 vt2 = Vector3.zero;
-                if (direction == Vector3.up || direction == Vector3.down)
-                {
-                    v1 = m_pipeCursorPosition + new Vector3(radius1 * Mathf.Cos(angle1), 0, radius1 * Mathf.Sin(angle1));
-                    v2 = m_pipeCursorPosition + new Vector3(radius1 * Mathf.Cos(angle2), 0, radius1 * Mathf.Sin(angle2));
-                }
-                else if (direction == Vector3.left || direction == Vector3.right)
-                {
-                    v1 = m_pipeCursorPosition + new Vector3(0, radius1 * Mathf.Sin(angle1), radius1 * Mathf.Cos(angle1));
-                    v2 = m_pipeCursorPosition + new Vector3(0, radius1 * Mathf.Sin(angle2), radius1 * Mathf.Cos(angle2));
-                }
-                else if (direction == Vector3.forward || direction == Vector3.back)
-                {
-                    v1 = m_pipeCursorPosition + new Vector3(radius1 * Mathf.Sin(angle1), radius1 * Mathf.Cos(angle1),0);
-                    v2 = m_pipeCursorPosition + new Vector3(radius1 * Mathf.Sin(angle2), radius1 * Mathf.Cos(angle2),0);
-                }
-                else
-                {
-                    v1 = m_pipeCursorPosition + new Vector3(radius1 * Mathf.Cos(angle1), 0, radius1 * Mathf.Sin(angle1));
-                    v2 = m_pipeCursorPosition + new Vector3(radius1 * Mathf.Cos(angle2), 0, radius1 * Mathf.Sin(angle2));
+                float angle1 = c_tau / detail * i;
+                float angle2 = c_tau / detail * (i + 1);
+                Debug.Log("angle 1: " + angle1 + ", angle 2: " + angle2);
 
-                }
-                if (radiusChanges)
-                {
-                    if (direction == Vector3.up || direction == Vector3.down)
-                    {
-                        vt1 = m_pipeCursorPosition + new Vector3(radius2 * Mathf.Cos(angle1), 0, radius2 * Mathf.Sin(angle1)) + direction * height;
-                        vt2 = m_pipeCursorPosition + new Vector3(radius2 * Mathf.Cos(angle2), 0, radius2 * Mathf.Sin(angle2)) + direction * height;
-                        RotateVertices(ref v1, ref v2, ref vt1, ref vt2, angle, turnAxis);
-                        CreatePolygons(v1, v2, vt1, vt2, 1, direction);
-                    }
-                    else if (direction == Vector3.left || direction == Vector3.right)
-                    {
-                        vt1 = m_pipeCursorPosition + new Vector3(0, radius2 * Mathf.Sin(angle1), radius2 * Mathf.Cos(angle1)) + direction * height;
-                        vt2 = m_pipeCursorPosition + new Vector3(0, radius2 * Mathf.Sin(angle2), radius2 * Mathf.Cos(angle2)) + direction * height;
-                        RotateVertices(ref v1, ref v2, ref vt1, ref vt2, angle, turnAxis);
-                        CreatePolygons(v1, v2, vt1, vt2, 1, direction);
-                    }
+                Vector3 v1 = RotateVertex(offsetStart, direction, angle1);
+                Vector3 v2 = RotateVertex(offsetStart, direction, angle2);
+                Vector3 vt1 = RotateVertex(offsetEnd, direction, angle1)+direction*height;
+                Vector3 vt2 = RotateVertex(offsetEnd, direction, angle2)+direction*height;
+                Vector3[] normals = new Vector3[] { 
+                    new Vector3(v1.x, v1.y, v1.z).normalized,
+                    new Vector3(v2.x, v2.y, v2.z).normalized,
+                    new Vector3(v1.x, v1.y, v1.z).normalized,
+                    new Vector3(v2.x, v2.y, v2.z).normalized };
+                v1 += m_pipeCursorPosition;
+                v2 += m_pipeCursorPosition;
+                vt1 += m_pipeCursorPosition;
+                vt2 += m_pipeCursorPosition;
+                //Debug.DrawLine(v1, v2, Color.magenta, 30f);
+                //await Task.Delay(1000);
+                //Debug.DrawLine(v1, vt1, Color.magenta, 30f);
+                //await Task.Delay(1000);
+                //Debug.DrawLine(v2, vt2, Color.magenta, 30f);
+                //await Task.Delay(1000);
+                //Debug.DrawLine(vt1, vt2, Color.magenta, 30f);
+                //await Task.Delay(1000);
+                //Debug.Log("Vertices: " + v1 + ", " + v2 + ", " + vt1 + ", " + vt2);
+                //await Task.Delay(1000);
 
-                }
-                else
-                {
-                    vt1 = v1 + direction * height;
-                    vt2 = v2 + direction * height;
-                    RotateVertices(ref v1, ref v2, ref vt1, ref vt2, angle, turnAxis);
-                    CreatePolygons(v1, v2, vt1, vt2, 1, direction);
-                }
+                CreatePolygons(v1, v2, vt1, vt2, 1, direction, normals);
+
             }
-            
+
+            UpdateMesh(direction, cursorOffset);
+            Debug.Log("Segment ready...");
+        }
+        private Vector3 GetCenterAxis(Vector3 direction)
+        {
+            if (direction.x == 0)
+                return new Vector3(1,0,0);
+            if (direction.y == 0)
+                return new Vector3(0, 1, 0);
+            if (direction.z == 0)
+                return new Vector3(0,0,1);
+            return Vector3.zero;
+        }
+
+        private void UpdateMesh(Vector3 direction, Vector3 cursorOffset)
+        {
             m_Mesh.vertices = m_vertices;
             m_Mesh.uv = m_UV;
             m_Mesh.normals = m_normals;
             m_Mesh.triangles = m_triangles;
             m_MeshFilter.mesh = m_Mesh;
             m_pipeCursorPosition += cursorOffset;
-            Debug.Log("Segment ready...");
-            //await Task.Delay(1000);
+            m_lastDirection = direction;
         }
-        private Vector3 RotateVertex(Vector3 vertex, Vector3 rotationAxis, float angle)
+
+        private Vector3 RotateVertex(Vector3 v, Vector3 k, float angle)
         {
-            Vector3 cross = Vector3.Cross(vertex, rotationAxis);
-            float dot = Vector3.Dot(vertex, rotationAxis);
-            float sign = Vector3.Dot(rotationAxis, Vector3.one);
-            angle = sign < 0 ? angle : -angle;
+            Vector3 cross = Vector3.Cross(k,v);
+            float dot = Vector3.Dot(k, v);
 
             //Rodrigues formula
-            return vertex * Mathf.Cos(angle) + cross * Mathf.Sin(angle) + rotationAxis * dot * (1 - Mathf.Cos(angle));
-        }
-        private void RotateVertices(ref Vector3 v1,ref Vector3 v2,ref Vector3 v3, ref Vector3 v4 ,float angle, Vector3 rotationAxis)
-        {
-            var vertices = new Vector3[] { v1, v2, v3, v4 };
-            
-            for (int i=0; i<vertices.Length;i++)
-            {
-                Debug.Log("Rotating vertex:" + vertices[i]+" by " + angle);
-                vertices[i] = RotateVertex(vertices[i], rotationAxis, angle);
-                Debug.Log("Rotated vertex:" + vertices[i]);
-            }
-            /*
-            if (rotationAxis.x == 1)
-            {
-                v1 = new Vector3(v1.x, v1.y*Mathf.Cos(angle), v1.z * Mathf.Sin(angle));
-                v2 = new Vector3(v2.x, v2.y*Mathf.Cos(angle), v2.z * Mathf.Sin(angle));
-                v3 = new Vector3(v3.x, v3.y*Mathf.Cos(angle), v3.z * Mathf.Sin(angle));
-                v4 = new Vector3(v4.x, v4.y*Mathf.Cos(angle), v4.z * Mathf.Sin(angle));
-            }
-            if (rotationAxis.y == 1)
-            {
-                v1 = new Vector3(v1.x * Mathf.Cos(angle), v1.y, v1.z * Mathf.Sin(angle));
-                v2 = new Vector3(v2.x * Mathf.Cos(angle), v2.y, v2.z * Mathf.Sin(angle));
-                v3 = new Vector3(v3.x * Mathf.Cos(angle), v3.y, v3.z * Mathf.Sin(angle));
-                v4 = new Vector3(v4.x * Mathf.Cos(angle), v4.y, v4.z * Mathf.Sin(angle));
-
-            }
-            if (rotationAxis.z == 1)
-            {
-                v1 = new Vector3(v1.x * Mathf.Cos(angle), v1.y * Mathf.Sin(angle), v1.z );
-                v2 = new Vector3(v2.x * Mathf.Cos(angle), v2.y * Mathf.Sin(angle), v2.z);
-                v3 = new Vector3(v3.x * Mathf.Cos(angle), v3.y * Mathf.Sin(angle), v3.z );
-                v4 = new Vector3(v4.x * Mathf.Cos(angle), v4.y * Mathf.Sin(angle), v4.z );
-
-            }*/
+            return v * Mathf.Cos(angle) + cross * Mathf.Sin(angle) + k * dot * (1 - Mathf.Cos(angle));
         }
 
-        /// <summary>
-        /// Calculate surface normal based on the four vertices passed in to the funcion.
-        /// Vertice order should be bottom left, top left, bottom right
-        /// </summary>
-        /// <param name="from1">Bottom left vertex</param>
-        /// <param name="from2">Bottom right vertex</param>
-        /// <param name="to1">Top left vertex</param>
-        /// <returns>Surface normal vector</returns>
-        private Vector3 CalculateNormal(Vector3 from1, Vector3 from2, Vector3 to1, Vector3 direction)
-        {
-            return direction==Vector3.left||direction==Vector3.down || direction==Vector3.back?
-                -Vector3.Cross(to1 - from1, from2 - from1): 
-                Vector3.Cross(to1 - from1, from2 - from1);
-        }
 
         /// <summary>
         /// Creates a range of polygons.
@@ -351,10 +299,8 @@ namespace Piping
         /// <param name="to2">Vertex 4</param>
         /// <param name="polyCount">How many polygons to split it in?</param>
         /// <param name="direction">In which direction?</param>
-        void CreatePolygons(Vector3 from1, Vector3 from2, Vector3 to1, Vector3 to2, float polyCount, Vector3 direction)
+        void CreatePolygons(Vector3 from1, Vector3 from2, Vector3 to1, Vector3 to2, float polyCount, Vector3 direction, Vector3[] normals)
         {
-            Vector3 normal = CalculateNormal(from1, from2, to1, direction);
-
           
             for (int i = 0; i < polyCount; i++)
             {
@@ -365,7 +311,7 @@ namespace Piping
                     from1,
                     from2
                 };
-                CreatePolygon(poly, normal);
+                CreatePolygon(poly, normals);
             }
             
         }
@@ -374,7 +320,7 @@ namespace Piping
         /// </summary>
         /// <param name="vertices">Polygon's vertices</param>
         /// <param name="surfaceNormal">Surface normal of the polygon</param>
-        public void CreatePolygon(Vector3[] vertices, Vector3 surfaceNormal)
+        public void CreatePolygon(Vector3[] vertices, Vector3[] normals)
         {
             List<Vector3> vec = new List<Vector3>();
             List<Vector2> uv = new List<Vector2>();
@@ -427,16 +373,18 @@ namespace Piping
             }
             int[] indexes = new int[4];
             int counter = 0;
-            foreach (Vector3 vec3 in vertices)
+            for (int i=0; i<vertices.Length; i++)
             {
+                Vector3 vec3 = vertices[i];
                 vec.Add(vec3);
-                nor.Add(surfaceNormal);
+                nor.Add(normals[i]);
                 if (vec.Contains(vec3))
                 {
                     indexes[counter] = vec.IndexOf(vec3);
                 }
                 else
                 {
+
                     indexes[counter] = vec.Count + counter - 1;
                 }
                 counter++;
